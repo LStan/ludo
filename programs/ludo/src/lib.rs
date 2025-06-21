@@ -40,6 +40,23 @@ pub mod ludo {
         Ok(())
     }
 
+    pub fn cancel_game(ctx: Context<CancelGame>, color: Colors) -> Result<()> {
+        let game = &mut ctx.accounts.game;
+
+        if game.game_state != GameState::NotStarted {
+            return Err(ProgramError::InvalidInstructionData.into());
+        }
+
+        if game.cur_player != 1 {
+            return Err(ProgramError::InvalidInstructionData.into());
+        }
+
+        if game.players[color as usize] != ctx.accounts.player.key() {
+            return Err(ProgramError::MissingRequiredSignature.into());
+        }
+        Ok(())
+    }
+
     pub fn join_game(ctx: Context<JoinGame>, color: Colors) -> Result<()> {
         let game = &mut ctx.accounts.game;
 
@@ -126,18 +143,18 @@ pub mod ludo {
         msg!("Consuming random number: {:?}", rnd_u8);
 
         if game.players[game.cur_player as usize] == Pubkey::default() {
-            next_player(game);
+            game.next_player();
         }
 
         for _ in 0..rnd_u8 {
-            next_player(game);
+            game.next_player();
         }
 
         game.game_state = GameState::RollDice;
         Ok(())
     }
 
-    pub fn roll_dice(ctx: Context<DoRollDiceCtx>, client_seed: u8) -> Result<()> {
+    pub fn roll_dice_delegate(ctx: Context<RollDiceDelegateCtx>, client_seed: u8) -> Result<()> {
         let game = &mut ctx.accounts.game;
 
         if game.game_state != GameState::RollDice {
@@ -205,7 +222,7 @@ pub mod ludo {
 
         if game.six_count == 2 {
             game.six_count = 0;
-            next_player(game);
+            game.next_player();
         } else {
             game.six_count += 1;
         }
@@ -232,7 +249,7 @@ pub mod ludo {
             }
         }
 
-        next_player(game);
+        game.next_player();
         game.game_state = GameState::RollDice;
         Ok(())
     }
@@ -275,8 +292,8 @@ pub mod ludo {
                 if game.players[defender as usize] == Pubkey::default() {
                     continue;
                 }
-                for i in 0..4 {
-                    let def_position = game.token_positions[defender as usize][i];
+                for token in 0..4 {
+                    let def_position = game.token_positions[defender as usize][token];
                     if def_position == -1 {
                         continue;
                     }
@@ -287,18 +304,20 @@ pub mod ludo {
                     };
                     if go_home {
                         // check for blocks
-                        for j in 0..4 {
-                            if j == i {
+                        for token2 in 0..4 {
+                            if token2 == token {
                                 continue;
                             }
-                            if game.token_positions[defender as usize][i]
-                                == game.token_positions[defender as usize][j]
+                            // block found
+                            if game.token_positions[defender as usize][token]
+                                == game.token_positions[defender as usize][token2]
                             {
                                 game.token_positions[cur_player as usize][token_num as usize] = -1;
                                 break 'outer;
                             }
                         }
-                        game.token_positions[defender as usize][i] = -1;
+                        // no blocks
+                        game.token_positions[defender as usize][token] = -1;
                         break 'outer;
                     }
                 }
@@ -308,15 +327,33 @@ pub mod ludo {
         if game.current_roll == 6 {
             if game.six_count == 2 {
                 game.six_count = 0;
-                next_player(game);
+                game.next_player();
             } else {
                 game.six_count += 1;
             }
         } else {
             game.six_count = 0;
-            next_player(game);
+            game.next_player();
         }
         game.game_state = GameState::RollDice;
+        Ok(())
+    }
+
+    pub fn roll_dice_debug(ctx: Context<Move>, roll: u8) -> Result<()> {
+        let game = &mut ctx.accounts.game;
+        game.current_roll = roll;
+        game.game_state = GameState::Move;
+        Ok(())
+    }
+
+    pub fn move_tile_debug(
+        ctx: Context<Move>,
+        color: Colors,
+        token_num: u8,
+        position: i8,
+    ) -> Result<()> {
+        let game = &mut ctx.accounts.game;
+        game.token_positions[color as usize][token_num as usize] = position;
         Ok(())
     }
 
@@ -354,6 +391,14 @@ pub struct CreateGame<'info> {
 }
 
 #[derive(Accounts)]
+pub struct CancelGame<'info> {
+    #[account(mut)]
+    pub player: Signer<'info>,
+    #[account(mut, seeds = [GAME, game.seed.to_le_bytes().as_ref()], bump = game.bump, close = player)]
+    pub game: Account<'info, Game>,
+}
+
+#[derive(Accounts)]
 pub struct JoinGame<'info> {
     #[account(mut)]
     pub player: Signer<'info>,
@@ -385,7 +430,7 @@ pub struct CallbackStartGameCtx<'info> {
 
 #[vrf]
 #[derive(Accounts)]
-pub struct DoRollDiceCtx<'info> {
+pub struct RollDiceDelegateCtx<'info> {
     #[account(mut)]
     pub player: Signer<'info>,
     #[account(mut, seeds = [GAME, game.seed.to_le_bytes().as_ref()], bump = game.bump)]
@@ -440,7 +485,6 @@ pub struct Undelegate<'info> {
     pub game: Account<'info, Game>,
 }
 
-
 #[account]
 #[derive(InitSpace)]
 pub struct Game {
@@ -454,6 +498,17 @@ pub struct Game {
     pub six_count: u8,
     pub players: [Pubkey; 4],
     pub winner: Pubkey, // ??? is there one winner or multiple???
+}
+
+impl Game {
+    pub fn next_player(&mut self) {
+        loop {
+            self.cur_player = (self.cur_player + 1) % 4;
+            if self.players[self.cur_player as usize] != Pubkey::default() {
+                break;
+            }
+        }
+    }
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, InitSpace)]
@@ -472,13 +527,4 @@ pub enum Colors {
     Green = 1,
     Yellow = 2,
     Blue = 3,
-}
-
-pub fn next_player(game: &mut Game) {
-    loop {
-        game.cur_player = (game.cur_player + 1) % 4;
-        if game.players[game.cur_player as usize] != Pubkey::default() {
-            break;
-        }
-    }
 }
