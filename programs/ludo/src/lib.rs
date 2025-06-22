@@ -24,6 +24,10 @@ pub mod ludo {
         num_players: u8,
         color: Colors,
     ) -> Result<()> {
+        require!(
+            num_players == 2 || num_players == 3 || num_players == 4,
+            LudoError::InvalidNumPlayers
+        );
         ctx.accounts.game.set_inner(Game {
             seed,
             bump: ctx.bumps.game,
@@ -43,39 +47,44 @@ pub mod ludo {
     pub fn cancel_game(ctx: Context<CancelGame>, color: Colors) -> Result<()> {
         let game = &mut ctx.accounts.game;
 
-        if game.game_state != GameState::NotStarted {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
+        require!(
+            game.game_state == GameState::NotStarted,
+            LudoError::GameAlreadyStarted
+        );
 
-        if game.cur_player != 1 {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
+        require!(game.cur_player == 1, LudoError::AnotherPlayerAlreadyJoined);
 
-        if game.players[color as usize] != ctx.accounts.player.key() {
-            return Err(ProgramError::MissingRequiredSignature.into());
-        }
+        require!(
+            game.players[color as usize] == ctx.accounts.player.key(),
+            LudoError::WrongPlayer
+        );
         Ok(())
     }
 
     pub fn join_game(ctx: Context<JoinGame>, color: Colors) -> Result<()> {
         let game = &mut ctx.accounts.game;
 
-        if game.game_state != GameState::NotStarted {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
+        require!(
+            game.game_state == GameState::NotStarted,
+            LudoError::GameAlreadyStarted
+        );
 
-        if game.cur_player + 1 == game.num_players {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
+        require!(
+            game.cur_player + 1 < game.num_players,
+            LudoError::NeedToRunJoinAndStart
+        );
 
         let player = &ctx.accounts.player;
 
-        if game.players.contains(&player.key()) {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
-        if game.players[color as usize] != Pubkey::default() {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
+        require!(
+            !game.players.contains(&player.key()),
+            LudoError::PlayerAlreadyJoined
+        );
+
+        require!(
+            game.players[color as usize] == Pubkey::default(),
+            LudoError::ColorAlreadyTaken
+        );
 
         game.players[color as usize] = player.key();
 
@@ -91,22 +100,27 @@ pub mod ludo {
     ) -> Result<()> {
         let game = &mut ctx.accounts.game;
 
-        if game.game_state != GameState::NotStarted {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
+        require!(
+            game.game_state == GameState::NotStarted,
+            LudoError::GameAlreadyStarted
+        );
 
-        if game.cur_player + 1 != game.num_players {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
+        require!(
+            game.cur_player + 1 == game.num_players,
+            LudoError::NeedToRunJoin
+        );
 
         let player = &ctx.accounts.player;
 
-        if game.players.contains(&player.key()) {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
-        if game.players[color as usize] != Pubkey::default() {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
+        require!(
+            !game.players.contains(&player.key()),
+            LudoError::PlayerAlreadyJoined
+        );
+
+        require!(
+            game.players[color as usize] == Pubkey::default(),
+            LudoError::ColorAlreadyTaken
+        );
 
         game.players[color as usize] = player.key();
 
@@ -157,16 +171,17 @@ pub mod ludo {
     pub fn roll_dice_delegate(ctx: Context<RollDiceDelegateCtx>, client_seed: u8) -> Result<()> {
         let game = &mut ctx.accounts.game;
 
-        if game.game_state != GameState::RollDice {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
+        require!(
+            game.game_state == GameState::RollDice,
+            LudoError::WrongGameState
+        );
 
         let cur_player = game.cur_player;
 
-        let cur_player_key = game.players[cur_player as usize];
-        if cur_player_key != ctx.accounts.player.key() {
-            return Err(ProgramError::MissingRequiredSignature.into());
-        }
+        require!(
+            game.players[cur_player as usize] == ctx.accounts.player.key(),
+            LudoError::WrongPlayer
+        );
 
         game.game_state = GameState::RollingDice;
 
@@ -205,27 +220,27 @@ pub mod ludo {
 
     pub fn token_into_play(ctx: Context<TokenIntoPlay>, token_num: u8) -> Result<()> {
         let game = &mut ctx.accounts.game;
+        require!(
+            game.game_state == GameState::Move,
+            LudoError::WrongGameState
+        );
+
         let cur_player = game.cur_player;
 
-        let cur_player_key = game.players[cur_player as usize];
-        if cur_player_key != ctx.accounts.player.key() {
-            return Err(ProgramError::MissingRequiredSignature.into());
-        }
+        require!(
+            game.players[cur_player as usize] == ctx.accounts.player.key(),
+            LudoError::WrongPlayer
+        );
 
-        if game.current_roll != 6 {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
-        if game.token_positions[cur_player as usize][token_num as usize] != -1 {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
+        require!(game.current_roll == 6, LudoError::WrongMove);
+
+        require!(game.six_count < 2, LudoError::WrongMove);
+        require!(
+            game.token_positions[cur_player as usize][token_num as usize] == -1,
+            LudoError::WrongMove
+        );
+
         game.token_positions[cur_player as usize][token_num as usize] = 0;
-
-        if game.six_count == 2 {
-            game.six_count = 0;
-            game.next_player();
-        } else {
-            game.six_count += 1;
-        }
 
         game.game_state = GameState::RollDice;
         Ok(())
@@ -233,22 +248,30 @@ pub mod ludo {
 
     pub fn skip_move(ctx: Context<Move>) -> Result<()> {
         let game = &mut ctx.accounts.game;
+        require!(
+            game.game_state == GameState::Move,
+            LudoError::WrongGameState
+        );
+
         let cur_player = game.cur_player;
 
-        let cur_player_key = game.players[cur_player as usize];
-        if cur_player_key != ctx.accounts.player.key() {
-            return Err(ProgramError::MissingRequiredSignature.into());
+        require!(
+            game.players[cur_player as usize] == ctx.accounts.player.key(),
+            LudoError::WrongPlayer
+        );
+
+        if !(game.current_roll == 6 && game.six_count == 2) {
+            for token in game.token_positions[cur_player as usize].iter() {
+                if *token == -1 && game.current_roll != 6 || *token == 56 {
+                    continue;
+                }
+                if *token + game.current_roll as i8 <= 56 {
+                    return Err(LudoError::WrongMove.into());
+                }
+            }
         }
 
-        for token in game.token_positions[cur_player as usize].iter() {
-            if *token == -1 || *token == 56 {
-                continue;
-            }
-            if *token + game.current_roll as i8 <= 56 {
-                return Err(ProgramError::InvalidInstructionData.into());
-            }
-        }
-
+        game.six_count = 0;
         game.next_player();
         game.game_state = GameState::RollDice;
         Ok(())
@@ -256,23 +279,30 @@ pub mod ludo {
 
     pub fn make_move(ctx: Context<Move>, token_num: u8) -> Result<()> {
         let game = &mut ctx.accounts.game;
+        require!(
+            game.game_state == GameState::Move,
+            LudoError::WrongGameState
+        );
+
         let cur_player = game.cur_player;
 
-        let cur_player_key = game.players[cur_player as usize];
-        if cur_player_key != ctx.accounts.player.key() {
-            return Err(ProgramError::MissingRequiredSignature.into());
-        }
+        require!(
+            game.players[cur_player as usize] == ctx.accounts.player.key(),
+            LudoError::WrongPlayer
+        );
+
+        require!(
+            (game.six_count == 2 && game.current_roll != 6) || game.six_count < 2,
+            LudoError::WrongMove
+        );
 
         let cur_position = game.token_positions[cur_player as usize][token_num as usize];
-        if cur_position == -1 {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
+
+        require!(cur_position != -1, LudoError::WrongMove);
 
         let new_position = cur_position + game.current_roll as i8;
 
-        if new_position > 56 {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
+        require!(new_position <= 56, LudoError::WrongMove);
 
         game.token_positions[cur_player as usize][token_num as usize] = new_position;
         if game.token_positions[cur_player as usize]
@@ -325,12 +355,7 @@ pub mod ludo {
         }
 
         if game.current_roll == 6 {
-            if game.six_count == 2 {
-                game.six_count = 0;
-                game.next_player();
-            } else {
-                game.six_count += 1;
-            }
+            game.six_count += 1;
         } else {
             game.six_count = 0;
             game.next_player();
@@ -367,9 +392,10 @@ pub mod ludo {
     }
 
     pub fn undelegate(ctx: Context<Undelegate>) -> Result<()> {
-        if ctx.accounts.game.game_state != GameState::Finished {
-            return Err(ProgramError::InvalidInstructionData.into());
-        }
+        require!(
+            ctx.accounts.game.game_state == GameState::Finished,
+            LudoError::GameNotFinished
+        );
         commit_and_undelegate_accounts(
             &ctx.accounts.payer,
             vec![&ctx.accounts.game.to_account_info()],
@@ -527,4 +553,19 @@ pub enum Colors {
     Green = 1,
     Yellow = 2,
     Blue = 3,
+}
+
+#[error_code]
+pub enum LudoError {
+    InvalidNumPlayers,
+    AnotherPlayerAlreadyJoined,
+    GameAlreadyStarted,
+    WrongPlayer,
+    NeedToRunJoinAndStart,
+    NeedToRunJoin,
+    PlayerAlreadyJoined,
+    ColorAlreadyTaken,
+    WrongGameState,
+    WrongMove,
+    GameNotFinished,
 }
