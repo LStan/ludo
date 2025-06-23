@@ -209,12 +209,32 @@ pub mod ludo {
         ctx: Context<CallbackRollDiceCtx>,
         randomness: [u8; 32],
     ) -> Result<()> {
-        let rnd_u8 = ephemeral_vrf_sdk::rnd::random_u8_with_range(&randomness, 1, 6);
-        msg!("Consuming random number: {:?}", rnd_u8);
+        let roll = ephemeral_vrf_sdk::rnd::random_u8_with_range(&randomness, 1, 6);
+        msg!("Consuming random number: {:?}", roll);
 
         let game = &mut ctx.accounts.game;
-        game.current_roll = rnd_u8;
-        game.game_state = GameState::Move;
+
+        let mut skip_turn = true;
+
+        if !(roll == 6 && game.six_count == 2) {
+            for token in game.token_positions[game.cur_player as usize].iter() {
+                if *token == -1 && roll != 6 || *token == 56 {
+                    continue;
+                }
+                if *token + roll as i8 <= 56 {
+                    skip_turn = false;
+                }
+            }
+        }
+
+        if skip_turn {
+            game.six_count = 0;
+            game.next_player();
+            game.game_state = GameState::RollDice;
+        } else {
+            game.current_roll = roll;
+            game.game_state = GameState::Move;
+        }
         Ok(())
     }
 
@@ -234,7 +254,9 @@ pub mod ludo {
 
         require!(game.current_roll == 6, LudoError::WrongMove);
 
+        // this should never happen because the turn should be skipped in callback_roll_dice
         require!(game.six_count < 2, LudoError::WrongMove);
+
         require!(
             game.token_positions[cur_player as usize][token_num as usize] == -1,
             LudoError::WrongMove
@@ -242,37 +264,6 @@ pub mod ludo {
 
         game.token_positions[cur_player as usize][token_num as usize] = 0;
 
-        game.game_state = GameState::RollDice;
-        Ok(())
-    }
-
-    pub fn skip_move(ctx: Context<Move>) -> Result<()> {
-        let game = &mut ctx.accounts.game;
-        require!(
-            game.game_state == GameState::Move,
-            LudoError::WrongGameState
-        );
-
-        let cur_player = game.cur_player;
-
-        require!(
-            game.players[cur_player as usize] == ctx.accounts.player.key(),
-            LudoError::WrongPlayer
-        );
-
-        if !(game.current_roll == 6 && game.six_count == 2) {
-            for token in game.token_positions[cur_player as usize].iter() {
-                if *token == -1 && game.current_roll != 6 || *token == 56 {
-                    continue;
-                }
-                if *token + game.current_roll as i8 <= 56 {
-                    return Err(LudoError::WrongMove.into());
-                }
-            }
-        }
-
-        game.six_count = 0;
-        game.next_player();
         game.game_state = GameState::RollDice;
         Ok(())
     }
@@ -291,6 +282,7 @@ pub mod ludo {
             LudoError::WrongPlayer
         );
 
+        // this should never happen because the turn should be skipped in callback_roll_dice
         require!(
             (game.six_count == 2 && game.current_roll != 6) || game.six_count < 2,
             LudoError::WrongMove
@@ -368,6 +360,14 @@ pub mod ludo {
         let game = &mut ctx.accounts.game;
         game.current_roll = roll;
         game.game_state = GameState::Move;
+        Ok(())
+    }
+
+    pub fn next_turn_debug(ctx: Context<Move>) -> Result<()> {
+        let game = &mut ctx.accounts.game;
+        game.six_count = 0;
+        game.next_player();
+        game.game_state = GameState::RollDice;
         Ok(())
     }
 
