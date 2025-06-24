@@ -356,6 +356,18 @@ pub mod ludo {
         Ok(())
     }
 
+    pub fn join_and_start_game_debug(
+        ctx: Context<Move>,
+        color: Colors,
+        start_player: Colors,
+    ) -> Result<()> {
+        let game = &mut ctx.accounts.game;
+        game.players[color as usize] = ctx.accounts.player.key();
+        game.cur_player = start_player as u8;
+        game.game_state = GameState::RollDice;
+        Ok(())
+    }
+
     pub fn roll_dice_debug(ctx: Context<Move>, roll: u8) -> Result<()> {
         let game = &mut ctx.accounts.game;
         game.current_roll = roll;
