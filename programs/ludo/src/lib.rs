@@ -156,7 +156,7 @@ pub mod ludo {
             ephemeral_vrf_sdk::rnd::random_u8_with_range(&randomness, 0, game.num_players - 1);
         msg!("Consuming random number: {:?}", rnd_u8);
 
-        if game.players[game.cur_player as usize] == Pubkey::default() {
+        if game.cur_player_key() == Pubkey::default() {
             game.next_player();
         }
 
@@ -176,10 +176,8 @@ pub mod ludo {
             LudoError::WrongGameState
         );
 
-        let cur_player = game.cur_player;
-
         require!(
-            game.players[cur_player as usize] == ctx.accounts.player.key(),
+            game.cur_player_key() == ctx.accounts.player.key(),
             LudoError::WrongPlayer
         );
 
@@ -248,7 +246,7 @@ pub mod ludo {
         let cur_player = game.cur_player;
 
         require!(
-            game.players[cur_player as usize] == ctx.accounts.player.key(),
+            game.cur_player_key() == ctx.accounts.player.key(),
             LudoError::WrongPlayer
         );
 
@@ -278,7 +276,7 @@ pub mod ludo {
         let cur_player = game.cur_player;
 
         require!(
-            game.players[cur_player as usize] == ctx.accounts.player.key(),
+            game.cur_player_key() == ctx.accounts.player.key(),
             LudoError::WrongPlayer
         );
 
@@ -357,7 +355,7 @@ pub mod ludo {
     }
 
     pub fn join_and_start_game_debug(
-        ctx: Context<Move>,
+        ctx: Context<Debug>,
         color: Colors,
         start_player: Colors,
     ) -> Result<()> {
@@ -368,14 +366,14 @@ pub mod ludo {
         Ok(())
     }
 
-    pub fn roll_dice_debug(ctx: Context<Move>, roll: u8) -> Result<()> {
+    pub fn roll_dice_debug(ctx: Context<Debug>, roll: u8) -> Result<()> {
         let game = &mut ctx.accounts.game;
         game.current_roll = roll;
         game.game_state = GameState::Move;
         Ok(())
     }
 
-    pub fn next_turn_debug(ctx: Context<Move>) -> Result<()> {
+    pub fn next_turn_debug(ctx: Context<Debug>) -> Result<()> {
         let game = &mut ctx.accounts.game;
         game.six_count = 0;
         game.next_player();
@@ -384,7 +382,7 @@ pub mod ludo {
     }
 
     pub fn move_tile_debug(
-        ctx: Context<Move>,
+        ctx: Context<Debug>,
         color: Colors,
         token_num: u8,
         position: i8,
@@ -504,6 +502,14 @@ pub struct Move<'info> {
     pub game: Account<'info, Game>,
 }
 
+#[derive(Accounts)]
+pub struct Debug<'info> {
+    #[account(mut)]
+    pub player: Signer<'info>,
+    #[account(mut, seeds = [GAME, game.seed.to_le_bytes().as_ref()], bump = game.bump)]
+    pub game: Account<'info, Game>,
+}
+
 #[delegate]
 #[derive(Accounts)]
 pub struct Delegate<'info> {
@@ -542,10 +548,15 @@ impl Game {
     pub fn next_player(&mut self) {
         loop {
             self.cur_player = (self.cur_player + 1) % 4;
-            if self.players[self.cur_player as usize] != Pubkey::default() {
+            if self.cur_player_key() != Pubkey::default() {
                 break;
             }
         }
+    }
+
+    #[inline(always)]
+    pub fn cur_player_key(&self) -> Pubkey {
+        self.players[self.cur_player as usize]
     }
 }
 
