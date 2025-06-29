@@ -236,7 +236,7 @@ pub mod ludo {
         Ok(())
     }
 
-    pub fn token_into_play(ctx: Context<TokenIntoPlay>, token_num: u8) -> Result<()> {
+    pub fn token_into_play(ctx: Context<Move>, token_num: u8) -> Result<()> {
         let game = &mut ctx.accounts.game;
         require!(
             game.game_state == GameState::Move,
@@ -483,14 +483,6 @@ pub struct CallbackRollDiceCtx<'info> {
     #[account(address = ephemeral_vrf_sdk::consts::VRF_PROGRAM_IDENTITY)]
     pub vrf_program_identity: Signer<'info>,
     #[account(mut)]
-    pub game: Account<'info, Game>,
-}
-
-#[derive(Accounts)]
-pub struct TokenIntoPlay<'info> {
-    #[account(mut)]
-    pub player: Signer<'info>,
-    #[account(mut, seeds = [GAME, game.seed.to_le_bytes().as_ref()], bump = game.bump)]
     pub game: Account<'info, Game>,
 }
 
