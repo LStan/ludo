@@ -1,0 +1,15 @@
+{
+  "short_name": "Ludo",
+  "name": "Piecing payments together",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "forground_color": "#F5F3E8",
+  "background_color": "#1F2937"
+}
