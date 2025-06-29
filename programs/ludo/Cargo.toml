@@ -23,6 +23,7 @@ custom-panic = []
 anchor-lang = "0.31.1"
 ephemeral-rollups-sdk = { version = "0.2.5", features = ["anchor"] }
 ephemeral-vrf-sdk = { version = "0.1.2", features = ["anchor"] }
+session-keys = { version = "2.0.3", features = ["no-entrypoint"] }
 
 [lints.rust.unexpected_cfgs]
 level = "warn"

@@ -816,6 +816,7 @@ dependencies = [
  "anchor-lang",
  "ephemeral-rollups-sdk",
  "ephemeral-vrf-sdk",
+ "session-keys",
 ]
 
 [[package]]
@@ -1142,6 +1143,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf41e0cfaf7226dca15e8197172c295a782857fcb97fad1808a166870dee75a3"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "session-keys"
+version = "2.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70265739dbb91e1eb99b220365c15c0f9bfb8ea60ab575f7302a32d5efb1dd5a"
+dependencies = [
+ "anchor-lang",
+ "session-keys-macros",
+ "solana-security-txt",
+]
+
+[[package]]
+name = "session-keys-macros"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6349e5cb01c08d3b3efad6cad6c63d622b703603812258ba6741cbc2c62ca39d"
+dependencies = [
+ "session-keys-macros-attribute",
+]
+
+[[package]]
+name = "session-keys-macros-attribute"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e07d122114bc5388a5440d62374b5b752f6013e270d100b479bb1b650d375d11"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -1788,6 +1820,12 @@ dependencies = [
  "solana-define-syscall",
  "thiserror 2.0.12",
 ]
+
+[[package]]
+name = "solana-security-txt"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "468aa43b7edb1f9b7b7b686d5c3aeb6630dc1708e86e31343499dd5c4d775183"
 
 [[package]]
 name = "solana-serde-varint"

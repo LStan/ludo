@@ -6,6 +6,7 @@ use ephemeral_rollups_sdk::ephem::commit_and_undelegate_accounts;
 use ephemeral_vrf_sdk::anchor::vrf;
 use ephemeral_vrf_sdk::instructions::{create_request_randomness_ix, RequestRandomnessParams};
 use ephemeral_vrf_sdk::types::SerializableAccountMeta;
+use session_keys::{session_auth_or, Session, SessionError, SessionToken};
 
 declare_id!("Ab2xsYDGv4GKKJc2wuKiGeqtXhP6ukJFNAHXvoCBVdHG");
 
@@ -168,17 +169,13 @@ pub mod ludo {
         Ok(())
     }
 
+    #[session_auth_or(ctx.accounts.player.key() == ctx.accounts.game.cur_player_key(), LudoError::WrongPlayer)]
     pub fn roll_dice_delegate(ctx: Context<RollDiceDelegateCtx>, client_seed: u8) -> Result<()> {
         let game = &mut ctx.accounts.game;
 
         require!(
             game.game_state == GameState::RollDice,
             LudoError::WrongGameState
-        );
-
-        require!(
-            game.cur_player_key() == ctx.accounts.player.key(),
-            LudoError::WrongPlayer
         );
 
         game.game_state = GameState::RollingDice;
@@ -236,6 +233,7 @@ pub mod ludo {
         Ok(())
     }
 
+    #[session_auth_or(ctx.accounts.player.key() == ctx.accounts.game.cur_player_key(), LudoError::WrongPlayer)]
     pub fn token_into_play(ctx: Context<Move>, token_num: u8) -> Result<()> {
         let game = &mut ctx.accounts.game;
         require!(
@@ -244,11 +242,6 @@ pub mod ludo {
         );
 
         let cur_player = game.cur_player;
-
-        require!(
-            game.cur_player_key() == ctx.accounts.player.key(),
-            LudoError::WrongPlayer
-        );
 
         require!(game.current_roll == 6, LudoError::WrongMove);
 
@@ -266,6 +259,7 @@ pub mod ludo {
         Ok(())
     }
 
+    #[session_auth_or(ctx.accounts.player.key() == ctx.accounts.game.cur_player_key(), LudoError::WrongPlayer)]
     pub fn make_move(ctx: Context<Move>, token_num: u8) -> Result<()> {
         let game = &mut ctx.accounts.game;
         require!(
@@ -274,11 +268,6 @@ pub mod ludo {
         );
 
         let cur_player = game.cur_player;
-
-        require!(
-            game.cur_player_key() == ctx.accounts.player.key(),
-            LudoError::WrongPlayer
-        );
 
         // this should never happen because the turn should be skipped in callback_roll_dice
         require!(
@@ -465,7 +454,7 @@ pub struct CallbackStartGameCtx<'info> {
 }
 
 #[vrf]
-#[derive(Accounts)]
+#[derive(Accounts, Session)]
 pub struct RollDiceDelegateCtx<'info> {
     #[account(mut)]
     pub player: Signer<'info>,
@@ -474,6 +463,8 @@ pub struct RollDiceDelegateCtx<'info> {
     /// CHECK: The oracle queue
     #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
     pub oracle_queue: AccountInfo<'info>,
+    #[session(signer = player, authority = game.cur_player_key())]
+    pub session_token: Option<Account<'info, SessionToken>>,
 }
 
 #[derive(Accounts)]
@@ -486,12 +477,14 @@ pub struct CallbackRollDiceCtx<'info> {
     pub game: Account<'info, Game>,
 }
 
-#[derive(Accounts)]
+#[derive(Accounts, Session)]
 pub struct Move<'info> {
     #[account(mut)]
     pub player: Signer<'info>,
     #[account(mut, seeds = [GAME, game.seed.to_le_bytes().as_ref()], bump = game.bump)]
     pub game: Account<'info, Game>,
+    #[session(signer = player, authority = game.cur_player_key())]
+    pub session_token: Option<Account<'info, SessionToken>>,
 }
 
 #[derive(Accounts)]
