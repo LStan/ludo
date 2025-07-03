@@ -381,7 +381,7 @@ pub mod ludo {
         Ok(())
     }
 
-    pub fn move_tile_debug(
+    pub fn move_token_debug(
         ctx: Context<Debug>,
         color: Colors,
         token_num: u8,
@@ -402,16 +402,20 @@ pub mod ludo {
     }
 
     pub fn undelegate(ctx: Context<Undelegate>) -> Result<()> {
-        require!(
-            ctx.accounts.game.game_state == GameState::Finished,
-            LudoError::GameNotFinished
-        );
+        // require!(
+        //     ctx.accounts.game.game_state == GameState::Finished,
+        //     LudoError::GameNotFinished
+        // );
         commit_and_undelegate_accounts(
             &ctx.accounts.payer,
             vec![&ctx.accounts.game.to_account_info()],
             &ctx.accounts.magic_context,
             &ctx.accounts.magic_program,
         )?;
+        Ok(())
+    }
+
+    pub fn close_game(_ctx: Context<CloseGame>) -> Result<()> {
         Ok(())
     }
 }
@@ -450,7 +454,7 @@ pub struct JoinStartGame<'info> {
     #[account(mut, seeds = [GAME, game.seed.to_le_bytes().as_ref()], bump = game.bump)]
     pub game: Account<'info, Game>,
     /// CHECK: The oracle queue
-    #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_EPHEMERAL_QUEUE)]
+    #[account(mut, address = ephemeral_vrf_sdk::consts::DEFAULT_QUEUE)]
     pub oracle_queue: AccountInfo<'info>,
 }
 
@@ -518,6 +522,14 @@ pub struct Undelegate<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     #[account(mut, seeds = [GAME, game.seed.to_le_bytes().as_ref()], bump = game.bump)]
+    pub game: Account<'info, Game>,
+}
+
+#[derive(Accounts)]
+pub struct CloseGame<'info> {
+    #[account(mut)]
+    pub player: Signer<'info>,
+    #[account(mut, close = player, seeds = [GAME, game.seed.to_le_bytes().as_ref()], bump = game.bump)]
     pub game: Account<'info, Game>,
 }
 

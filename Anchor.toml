@@ -12,7 +12,7 @@ ludo = "Ab2xsYDGv4GKKJc2wuKiGeqtXhP6ukJFNAHXvoCBVdHG"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
